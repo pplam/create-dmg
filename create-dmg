@@ -24,6 +24,7 @@ ICON_SIZE=128
 TEXT_SIZE=16
 FORMAT="UDZO"
 FILESYSTEM="HFS+"
+LANGUAGE="en"
 ADD_FILE_SOURCES=()
 ADD_FILE_TARGETS=()
 IMAGEKEY=""
@@ -150,6 +151,8 @@ Options:
       skip Finder-prettifying AppleScript, useful in Sandbox and non-GUI environments
   --applescript-sleep-duration
       specify the sleep duration before executing AppleScript to workaround occasional "Can’t get disk" (-1728) issues (default is 5)
+  --language <code>
+      select EULA template language (en|cn) (default is en)
   --version
       show create-dmg version number
   -h, --help
@@ -290,6 +293,9 @@ while [[ "${1:0:1}" = "-" ]]; do
 		--applescript-sleep-duration)
 			ERROR_1728_WORKAROUND_SLEEP_DURATION="$2"
 			shift; shift;;
+		--language)
+			LANGUAGE="$2"
+			shift; shift;;
 		-*)
 			echo "Unknown option: $1. Run 'create-dmg --help' for help."
 			exit 1;;
@@ -329,6 +335,11 @@ if [[ "${FILESYSTEM}" != "HFS+" ]] && [[ "${FILESYSTEM}" != "APFS" ]]; then
 	exit 1
 fi
 
+if [[ "${LANGUAGE}" != "en" ]] && [[ "${LANGUAGE}" != "cn" ]]; then
+	echo "Unknown language: ${LANGUAGE}. Supported values are en or cn. Run 'create-dmg --help' for help."
+	exit 1
+fi
+
 if [[ "${FILESYSTEM}" == "APFS" ]] && [[ ${SANDBOX_SAFE} -eq 1 ]]; then
 	echo "Creating an APFS disk image that is sandbox safe is not supported."
 	exit 1
@@ -351,16 +362,7 @@ fi
 
 # Detect where we're running from
 
-sentinel_file="$SCRIPT_DIR/.this-is-the-create-dmg-repo"
-if [[ -f "$sentinel_file" ]]; then
-	# We're running from inside a repo
-	CDMG_SUPPORT_DIR="$SCRIPT_DIR/support"
-else
-	# We're running inside an installed location
-	bin_dir="$SCRIPT_DIR"
-	prefix_dir=$(dirname "$bin_dir")
-	CDMG_SUPPORT_DIR="$prefix_dir/share/create-dmg/support"
-fi
+CDMG_SUPPORT_DIR="$SCRIPT_DIR/support"
 
 # Thus, DMG_NAME should not be only ".dmg"
 if [[ -z "$VOLUME_NAME" ]]; then
@@ -616,8 +618,9 @@ if [[ -n "${EULA_RSRC}" && "${EULA_RSRC}" != "-null-" ]]; then
 	# EULA_DATA="$(base64 -b 52 "${EULA_RSRC}" | sed s$'/^\(.*\)$/\t\t\t\\1/')"
 	EULA_DATA="$(openssl base64 -in "${EULA_RSRC}" | tr -d '\n' | awk '{gsub(/.{52}/,"&\n")}1' | sed s$'/^\(.*\)$/\t\t\t\\1/')"
 	# Fill the template with the custom EULA contents
+	EULA_TEMPLATE_FILE="${CDMG_SUPPORT_DIR}/eula-resources-template-${LANGUAGE}.xml"
 	eval "cat > \"${EULA_RESOURCES_FILE}\" <<EOF
-	$(<${CDMG_SUPPORT_DIR}/eula-resources-template.xml)
+	$(<${EULA_TEMPLATE_FILE})
 	EOF
 	"
 	# Apply the resources
